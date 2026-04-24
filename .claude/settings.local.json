@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(wc:*)",
+      "Bash(pnpm install)",
+      "Bash(npx tsc:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(pnpm test:*)",
+      "Bash(node:*)",
+      "Bash(find:*)",
+      "Bash(pnpm exec tsx:*)",
+      "Bash(/usr/bin/python3:*)",
+      "Bash(npx tsx:*)",
+      "Bash(ls:*)",
+      "Bash(for:*)",
+      "Bash(do if [ -d \"/Users/wrr/work/genericAgent-js/$dir\" ])",
+      "Bash(then echo \"EXISTS: $dir\")",
+      "Bash(else echo \"MISSING: $dir\")",
+      "Bash(fi:*)",
+      "Bash(done:*)",
+      "WebSearch",
+      "Bash(curl:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "sequential-thinking",
+    "context7",
+    "tavily",
+    "shadcn"
+  ]
+}

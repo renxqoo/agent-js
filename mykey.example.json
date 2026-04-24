@@ -1,0 +1,191 @@
+{
+  "// ── GenericAgent Configuration ──": "",
+  "// Instructions": "Copy this file to mykey.json and fill in your API keys.",
+  "// Format": "Each key is a SessionConfig (single LLM) or MixinConfig (load-balancing group).",
+  "// Service base URLs": "apibase is the key discriminator for vendor routing.",
+  "// model": "Can be any model name the provider accepts (e.g. gpt-4o, claude-sonnet-4-20250514).",
+  "// temperature": "Optional, defaults to 1.0. Vendor-specific clamping is applied automatically.",
+
+  "// ── Anthropic (Native API) ──": "",
+  "api_anthropic": {
+    "apikey": "sk-ant-api03-your-key-here",
+    "apibase": "https://api.anthropic.com",
+    "model": "claude-sonnet-4-20250514",
+    "context_win": 200000,
+    "temperature": 0.7
+  },
+
+  "// ── Anthropic (OpenAI-compatible proxies) ──": "",
+  "proxy_anthropic": {
+    "apikey": "sk-your-proxy-key",
+    "apibase": "https://your-proxy.com/v1",
+    "model": "claude-sonnet-4-20250514"
+  },
+
+  "// ── OpenAI ──": "",
+  "api_openai": {
+    "apikey": "sk-your-openai-key",
+    "apibase": "https://api.openai.com/v1",
+    "model": "gpt-4o"
+  },
+
+  "// ── OpenAI Responses API mode ──": "",
+  "api_openai_resp": {
+    "apikey": "sk-your-openai-key",
+    "apibase": "https://api.openai.com/v1",
+    "model": "gpt-4o",
+    "api_mode": "responses"
+  },
+
+  "// ── Azure OpenAI ──": "",
+  "api_azure": {
+    "apikey": "your-azure-api-key",
+    "apibase": "https://your-resource.openai.azure.com/openai/deployments/your-deployment",
+    "model": "gpt-4o",
+    "api_mode": "chat_completions"
+  },
+
+  "// ── MiniMax (Anthropic-compatible endpoint) ──": "",
+  "api_minimax": {
+    "apikey": "sk-your-minimax-key",
+    "apibase": "https://api.minimaxi.com/anthropic",
+    "model": "MiniMax-M2.7"
+  },
+
+  "// ── DeepSeek ──": "",
+  "api_deepseek": {
+    "apikey": "sk-your-deepseek-key",
+    "apibase": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat"
+  },
+
+  "// ── DeepSeek Reasoner (r1) ──": "",
+  "api_deepseek_r1": {
+    "apikey": "sk-your-deepseek-key",
+    "apibase": "https://api.deepseek.com/v1",
+    "model": "deepseek-reasoner"
+  },
+
+  "// ── Moonshot / Kimi ──": "",
+  "api_moonshot": {
+    "apikey": "sk-your-moonshot-key",
+    "apibase": "https://api.moonshot.cn/v1",
+    "model": "moonshot-v1-128k",
+    "temperature": 1.0
+  },
+
+  "// ── ZhipuAI / GLM ──": "",
+  "api_zhipu": {
+    "apikey": "your-zhipu-api-key",
+    "apibase": "https://open.bigmodel.cn/api/paas/v4",
+    "model": "glm-4-plus"
+  },
+
+  "// ── Qwen / Tongyi (Alibaba) ──": "",
+  "api_qwen": {
+    "apikey": "sk-your-qwen-key",
+    "apibase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "model": "qwen-max"
+  },
+
+  "// ── Baidu / ERNIE (Qianfan) ──": "",
+  "api_ernie": {
+    "apikey": "your-baidu-access-token",
+    "apibase": "https://qianfan.baidubce.com/v2",
+    "model": "ernie-4.0-turbo-8k"
+  },
+
+  "// ── ByteDance / Doubao ──": "",
+  "api_doubao": {
+    "apikey": "your-doubao-key",
+    "apibase": "https://ark.cn-beijing.volces.com/api/v3",
+    "model": "doubao-pro-128k"
+  },
+
+  "// ── xAI / Grok ──": "",
+  "api_grok": {
+    "apikey": "xai-your-grok-key",
+    "apibase": "https://api.x.ai/v1",
+    "model": "grok-2"
+  },
+
+  "// ── Mistral ──": "",
+  "api_mistral": {
+    "apikey": "your-mistral-key",
+    "apibase": "https://api.mistral.ai/v1",
+    "model": "mistral-large-latest"
+  },
+
+  "// ── Google / Gemini ──": "",
+  "api_gemini": {
+    "apikey": "your-gemini-key",
+    "apibase": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "model": "gemini-2.0-flash"
+  },
+
+  "// ── Groq ──": "",
+  "api_groq": {
+    "apikey": "gsk_your-groq-key",
+    "apibase": "https://api.groq.com/openai/v1",
+    "model": "llama-3.3-70b-versatile"
+  },
+
+  "// ── Together AI ──": "",
+  "api_together": {
+    "apikey": "your-together-key",
+    "apibase": "https://api.together.xyz/v1",
+    "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  },
+
+  "// ── Fireworks AI ──": "",
+  "api_fireworks": {
+    "apikey": "your-fireworks-key",
+    "apibase": "https://api.fireworks.ai/inference/v1",
+    "model": "accounts/fireworks/models/llama-v3p3-70b-instruct"
+  },
+
+  "// ── OpenRouter ──": "",
+  "api_openrouter": {
+    "apikey": "sk-or-v1-your-openrouter-key",
+    "apibase": "https://openrouter.ai/api/v1",
+    "model": "anthropic/claude-sonnet-4"
+  },
+
+  "// ── Ollama (local) ──": "",
+  "api_ollama": {
+    "apikey": "ollama",
+    "apibase": "http://localhost:11434/v1",
+    "model": "llama3.2"
+  },
+
+  "// ── LM Studio (local) ──": "",
+  "api_lmstudio": {
+    "apikey": "lm-studio",
+    "apibase": "http://localhost:1234/v1",
+    "model": "local-model"
+  },
+
+  "// ── vLLM / SGLang (self-hosted) ──": "",
+  "api_vllm": {
+    "apikey": "EMPTY",
+    "apibase": "http://localhost:8000/v1",
+    "model": "Qwen2.5-72B-Instruct"
+  },
+
+  "// ── Mixin (load-balancing / failover group) ──": "",
+  "api_mix": {
+    "max_retries": 3,
+    "base_delay": 1.5,
+    "spring_back": 300,
+    "llm_nos": ["api_openai", "api_deepseek", "api_qwen"]
+  },
+
+  "// ── Native Claude (browser-based / direct) ──": "",
+  "native_claude": {
+    "apikey": "sk-ant-sid-your-session-key",
+    "apibase": "https://claude.ai/api",
+    "model": "claude-sonnet-4-20250514[1M]",
+    "user_agent": "claude-cli/2.1.113 (external, cli)",
+    "fake_cc_system_prompt": false
+  }
+}
