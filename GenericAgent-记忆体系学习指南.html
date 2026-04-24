@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GenericAgent 记忆体系 — 原理 + 小白动手实现</title>
+  <meta name="description" content="分层记忆原理、与真实行为对照、从零搭建最小记忆闭环的步骤说明与演示指引（正文为自然语言，不嵌入程序片段）" />
+  <style>
+    :root {
+      --bg: #f0ebe3;
+      --bg-card: #fffcf7;
+      --ink: #1c1917;
+      --muted: #57534e;
+      --accent: #0c4a6e;
+      --accent-2: #155e75;
+      --accent-soft: #e0f2fe;
+      --border: #d6d3d1;
+      --code-bg: #292524;
+      --code-fg: #e7e5e4;
+      --warn-bg: #fff7ed;
+      --warn-border: #fdba74;
+      --ok-bg: #ecfdf5;
+      --radius: 12px;
+      --font: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      font-size: 17px;
+      line-height: 1.78;
+      color: var(--ink);
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 100% 70% at 100% 0%, rgba(219, 234, 254, 0.55) 0%, transparent 55%),
+        radial-gradient(ellipse 90% 60% at 0% 20%, rgba(254, 243, 199, 0.5) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(252, 231, 243, 0.35) 0%, transparent 45%);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    .part-label {
+      display: inline-block;
+      margin: 2rem 0 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .checklist li { margin-bottom: 0.5rem; }
+    .demo-panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin: 1.25rem 0;
+      background: #1c1917;
+      color: #e7e5e4;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      line-height: 1.55;
+    }
+    .demo-panel .demo-head {
+      background: #292524;
+      padding: 0.6rem 1rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #a8a29e;
+      border-bottom: 1px solid #44403c;
+    }
+    .demo-panel pre {
+      margin: 0;
+      padding: 1rem 1.15rem;
+      background: transparent;
+      color: inherit;
+      overflow-x: auto;
+      white-space: pre;
+      font-size: inherit;
+    }
+    .demo-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin: 0.75rem 0 0;
+    }
+    button.run-demo {
+      font-family: var(--font);
+      font-size: 0.95rem;
+      padding: 0.5rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.run-demo:hover { filter: brightness(1.08); }
+    .demo-note { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; }
+    header.doc-head {
+      text-align: center;
+      padding: 2.75rem 1.25rem 2.25rem;
+      margin-bottom: 2.5rem;
+      border-radius: var(--radius);
+      border: 1px solid rgba(214, 211, 209, 0.9);
+      background: linear-gradient(165deg, rgba(255, 252, 247, 0.97) 0%, rgba(224, 242, 254, 0.35) 45%, rgba(255, 252, 247, 0.92) 100%);
+      box-shadow: 0 8px 32px rgba(28, 25, 23, 0.06);
+      position: relative;
+      overflow: hidden;
+    }
+    header.doc-head::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(12, 74, 110, 0.04) 50%, transparent 100%);
+      pointer-events: none;
+    }
+    header.doc-head h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.75rem, 4.2vw, 2.35rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(120deg, #0c4a6e 0%, #155e75 40%, #0e7490 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      position: relative;
+    }
+    header.doc-head .sub {
+      color: var(--muted);
+      font-size: 1.06rem;
+      max-width: 40em;
+      margin: 0 auto;
+      line-height: 1.65;
+    }
+    .story-hook {
+      margin: 1.15rem auto 0;
+      max-width: 42em;
+      font-size: 0.98rem;
+      color: #44403c;
+      font-style: italic;
+      border-left: 3px solid #0ea5e9;
+      padding: 0.65rem 0 0.65rem 1rem;
+      text-align: left;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 0 8px 8px 0;
+    }
+    .badge {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.25rem 0.75rem;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    nav.toc {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2.5rem;
+      box-shadow: 0 4px 24px rgba(28, 25, 23, 0.06);
+    }
+    nav.toc h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    nav.toc ol {
+      margin: 0;
+      padding-left: 1.25rem;
+      columns: 1;
+    }
+    nav.toc a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    nav.toc a:hover { border-bottom-color: var(--accent); }
+    section {
+      margin-bottom: 2.75rem;
+    }
+    section > h2 {
+      font-size: 1.45rem;
+      color: var(--accent);
+      border-left: 4px solid var(--accent);
+      padding-left: 0.85rem;
+      margin: 0 0 1rem;
+      line-height: 1.35;
+    }
+    section > h3 {
+      font-size: 1.15rem;
+      margin: 1.75rem 0 0.65rem;
+      color: var(--ink);
+    }
+    p { margin: 0 0 1rem; }
+    ul, ol { margin: 0 0 1rem; padding-left: 1.35rem; }
+    li { margin-bottom: 0.35rem; }
+    strong { color: var(--ink); }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin: 1.25rem 0;
+      box-shadow: 0 2px 16px rgba(28, 25, 23, 0.04);
+    }
+    .callout {
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin: 1.25rem 0;
+      border-left: 4px solid;
+    }
+    .callout.warn {
+      background: var(--warn-bg);
+      border-color: #ea580c;
+    }
+    .callout.ok {
+      background: var(--ok-bg);
+      border-color: #059669;
+    }
+    .callout.tip {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    pre, code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+    }
+    code {
+      background: rgba(12, 74, 110, 0.08);
+      padding: 0.12em 0.4em;
+      border-radius: 4px;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      padding: 1rem 1.15rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      line-height: 1.55;
+      margin: 1rem 0;
+      font-size: 0.82rem;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+      margin: 1rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.65rem 0.85rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    tr:nth-child(even) td { background: rgba(255, 252, 247, 0.8); }
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin: 1.25rem 0;
+    }
+    .flow-step {
+      background: linear-gradient(135deg, #fff 0%, var(--bg-card) 100%);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      position: relative;
+      padding-left: 2.5rem;
+    }
+    .flow-step::before {
+      content: attr(data-n);
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1.5rem;
+      height: 1.5rem;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .kbd {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      padding: 0.1em 0.45em;
+      border-radius: 4px;
+      background: #fff;
+    }
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.9rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (min-width: 720px) {
+      nav.toc ol { columns: 2; column-gap: 2rem; }
+    }
+    @media print {
+      body { background: #fff; }
+      .card, nav.toc { box-shadow: none; }
+    }
+    .flowchart-section {
+      background: linear-gradient(180deg, #fffefb 0%, var(--bg-card) 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem 1.5rem 2rem;
+      margin: 2.25rem 0;
+      overflow-x: auto;
+      box-shadow: 0 6px 36px rgba(12, 74, 110, 0.08), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+      transition: box-shadow 0.25s ease;
+    }
+    .flowchart-section:hover {
+      box-shadow: 0 10px 44px rgba(12, 74, 110, 0.11), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+    }
+    .flowchart-section .flow-intro {
+      font-size: 1rem;
+      color: #44403c;
+      margin-bottom: 1rem;
+      max-width: 54em;
+      line-height: 1.8;
+    }
+    .memory-journey {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem 0.4rem;
+      padding: 1rem 1.1rem;
+      margin: 0 0 1.35rem;
+      border-radius: 14px;
+      background: linear-gradient(105deg, #fef9c3 0%, #bfdbfe 35%, #fbcfe8 70%, #d9f99d 100%);
+      background-size: 200% 100%;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #292524;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+      animation: journeyShift 14s ease-in-out infinite alternate;
+    }
+    @keyframes journeyShift {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+    .memory-journey span.step {
+      padding: 0.2rem 0.55rem;
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .memory-journey .j-arrow {
+      color: #64748b;
+      font-weight: 500;
+      padding: 0 0.15rem;
+    }
+    details.memory-deep-dive {
+      margin: 0.85rem 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.35rem 1rem 0.65rem;
+      background: rgba(255, 255, 255, 0.72);
+    }
+    details.memory-deep-dive summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--accent);
+      padding: 0.45rem 0;
+      list-style: none;
+    }
+    details.memory-deep-dive summary::-webkit-details-marker { display: none; }
+    details.memory-deep-dive summary::before {
+      content: "▸ ";
+      color: #0ea5e9;
+    }
+    details.memory-deep-dive[open] summary::before { content: "▾ "; }
+    details.memory-deep-dive ul {
+      margin: 0.35rem 0 0.25rem;
+      padding-left: 1.2rem;
+      font-size: 0.95rem;
+      color: #44403c;
+    }
+    .timing-table {
+      width: 100%;
+      font-size: 0.88rem;
+      margin: 1.25rem 0 0.5rem;
+      border-collapse: collapse;
+    }
+    .timing-table th, .timing-table td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.65rem;
+      vertical-align: top;
+    }
+    .timing-table th {
+      background: linear-gradient(180deg, #e0f2fe, #bae6fd);
+      color: #0c4a6e;
+    }
+    .timing-table .nl { color: #44403c; }
+    .flowchart-section svg {
+      display: block;
+      width: 100%;
+      max-width: 920px;
+      height: auto;
+      margin: 0 auto;
+    }
+    .mem-loop {
+      animation: memPulse 3s ease-in-out infinite;
+    }
+    @keyframes memPulse {
+      0%, 100% { stroke-opacity: 0.5; stroke-width: 2; }
+      50% { stroke-opacity: 1; stroke-width: 2.75; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .memory-journey { animation: none; }
+      .mem-loop { animation: none; }
+    }
+    .flow-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      margin-top: 1.25rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .flow-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .flow-legend i {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="doc-head">
+      <h1>GenericAgent 记忆体系</h1>
+      <p class="sub">把「越用越聪明」拆成可实现的工程：<strong>桌面上的分层档案</strong> + <strong>对话里的便签与锚点</strong> + <strong>工具闭环写入</strong>。上半篇对照真实运行机制讲透原理，下半篇用<strong>自然语言步骤、页内示意、全流程大图</strong>帮你照做（正文不嵌入程序片段）。</p>
+      <p class="story-hook">想象智能体的脑子是一块白板（上下文），磁盘则是带标签的抽屉柜：第一层是柜门上的便签（只写「东西在哪」），第二层是环境说明书，第三层是某类家务的「踩坑笔记」。白板写不下整本说明书，但永远知道该拉开哪一格。</p>
+      <span class="badge">原理 · 对照真实行为</span>
+      <span class="badge">动手最小版 + 流程图</span>
+      <span class="badge">静态阅读</span>
+    </header>
+
+    <nav class="toc" aria-label="目录">
+      <h2>目录 · 总览</h2>
+      <ol style="list-style:none;padding-left:0">
+        <li style="margin-bottom:0.35rem"><a href="#s0-flow"><strong>★ 记忆系统全流程图</strong>（从哪来→何时处理→怎么存→怎么用）</a></li>
+      </ol>
+      <h2>目录 · 上篇（原理与对照）</h2>
+      <ol>
+        <li><a href="#s1">为何需要「分层记忆」</a></li>
+        <li><a href="#s2">第零至四层：磁盘上的记忆拓扑</a></li>
+        <li><a href="#s2-real">补充：真实仓库里的记忆目录长什么样</a></li>
+        <li><a href="#s3">四大公理与工程含义</a></li>
+        <li><a href="#s4">「这条信息放哪？」决策树</a></li>
+        <li><a href="#s5">启动时：系统提示如何注入第一层索引</a></li>
+        <li><a href="#s6">任务内：处理器与工作记忆</a></li>
+        <li><a href="#s7">轮次节奏：每轮结束回调</a></li>
+        <li><a href="#s8">长期结算：开始长期记忆更新</a></li>
+        <li><a href="#s9">主循环与会话历史</a></li>
+        <li><a href="#s10">对话历史压缩与裁剪</a></li>
+        <li><a href="#s11">第四层归档与定时调度</a></li>
+        <li><a href="#s12">工具与记忆的契约</a></li>
+        <li><a href="#s13">跨会话与飞书场景</a></li>
+        <li><a href="#s14">常见误区与边界</a></li>
+        <li><a href="#s15">术语表与仓库索引</a></li>
+      </ol>
+      <h2 style="margin-top:1.25rem">目录 · 下篇（小白自建最小版）</h2>
+      <ol start="16">
+        <li><a href="#s16">你要实现的「最小记忆系统」长什么样</a></li>
+        <li><a href="#s17">第一步：目录与四个文件的初始内容</a></li>
+        <li><a href="#s18">第二步：读第一层索引并进系统提示</a></li>
+        <li><a href="#s19">第三步：会话内状态与锚点字符串</a></li>
+        <li><a href="#s20">第四步：一轮里用户消息怎么拼（时序）</a></li>
+        <li><a href="#s21">第五步：三个必备工具（参数与处理逻辑）</a></li>
+        <li><a href="#s22">第六步：长期结算回合</a></li>
+        <li><a href="#s23">第七步：补丁式改文件 唯一块替换（必抄核心）</a></li>
+        <li><a href="#s24">第八步：主循环五个钩子</a></li>
+        <li><a href="#s25">仓库入门演示脚本说明</a></li>
+        <li><a href="#s25-demo">演示跑一遍时会发生什么（文字版）</a></li>
+        <li><a href="#s26">自检清单与进阶差距</a></li>
+      </ol>
+    </nav>
+
+    <section id="s0-flow" class="flowchart-section">
+      <h2 style="border:none;padding:0;margin:0 0 0.5rem;color:var(--accent);font-size:1.55rem">记忆系统全流程图</h2>
+      <p class="flow-intro">下图按 <strong>GenericAgent 真实运行机制</strong>绘制。读图顺序建议：先看「一条任务的一生」彩条，再对照五条泳道。实线 = 主数据流；粉/蓝虚线 = 磁盘内容<strong>读回再注入</strong>模型；深蓝虚线 = <strong>跨轮闭环</strong>（动画闪烁）。展开折叠块可看到每一问对应的<strong>细节说明与在系统里的大致落点</strong>（一律用自然语言表述，不贴程序标识）。</p>
+
+      <div class="memory-journey" aria-label="任务生命周期">
+        <span class="step">① 唤醒</span><span class="j-arrow">→</span>
+        <span class="step">② 多轮干活</span><span class="j-arrow">→</span>
+        <span class="step">③ 便签锚定</span><span class="j-arrow">→</span>
+        <span class="step">④ 可选结算</span><span class="j-arrow">→</span>
+        <span class="step">⑤ 下次见面仍认得你</span>
+      </div>
+
+      <details class="memory-deep-dive">
+        <summary>① 记忆从哪来？（五种「原料」）</summary>
+        <ul>
+          <li><strong>用户话</strong>：目标与约束，本身不自动进磁盘；常记入<strong>工作要点便签</strong>，或促使模型去调用工具。</li>
+          <li><strong>工具成功结果 ★</strong>：本地执行脚本、读取文件、网页操作等<strong>已真实跑通</strong>的返回内容——这是<strong>唯一推荐写入第二层、第三层磁盘记忆的事实源</strong>（原则：没有动手验证，就不当事实写进档案）。</li>
+          <li><strong>模型自己写的单行摘要</strong>：每轮一句快照，进入<strong>回合摘要列表</strong>，再被锚点贴回对话，像一串便利贴。</li>
+          <li><strong>检查点更新</strong>：模型主动「更新工作检查点」，把要点放进内存里的<strong>工作区</strong>。</li>
+          <li><strong>外部塞条子</strong>：约定好的外部文件里写入要点或干预语，由系统读进下一轮提示，相当于人类在旁敲黑板。</li>
+        </ul>
+      </details>
+      <details class="memory-deep-dive">
+        <summary>② 何时处理？（像闹钟一样的钩子）</summary>
+        <ul>
+          <li><strong>进程启动</strong>：组装系统提示，把第一层索引这张「柜门便签」挂到模型眼前。</li>
+          <li><strong>每一轮工具之后</strong>：拼接<strong>工作记忆锚点</strong>，把最近摘要和工作要点便签贴回用户侧内容。</li>
+          <li><strong>第 10、20… 轮</strong>：在每轮结束回调里<strong>整段重贴第一层索引</strong>；主循环里还会周期性<strong>清空工具说明缓存</strong>，避免模型忘了工具长什么样。</li>
+          <li><strong>第 7 / 65 轮</strong>：插入强硬提醒，逼模型换策略或改为向用户提问、暂停任务。</li>
+          <li><strong>刚读完流程说明</strong>：系统会提醒：若按说明执行，记得更新工作检查点。</li>
+          <li><strong>长任务收尾</strong>：通过「开始长期记忆更新」打开专门的<strong>结算回合</strong>。</li>
+          <li><strong>后台定时</strong>：大约每十二小时，调度器把原始往来日志压缩进第四层归档，与前台对话并行。</li>
+        </ul>
+      </details>
+      <details class="memory-deep-dive">
+        <summary>③ 怎么处理？（下锅前的备菜）</summary>
+        <ul>
+          <li>先读<strong>第零层</strong>《记忆管理规范》文档，像「厨房安全守则」。</li>
+          <li><strong>分类</strong>：环境事实→第二层；全局铁律→第一层红线区；任务专有坑→第三层。</li>
+          <li><strong>读现状再改</strong>：「读取文件」的动作 → 「按唯一旧片段替换」的改文件动作（旧文本片段 必须唯一）。</li>
+          <li><strong>并行另一条线</strong>：压缩历史消息里的长标签 / 按长度裁剪旧消息，收拾<strong>请求里附带的多轮对话</strong>，不是写磁盘。</li>
+        </ul>
+      </details>
+      <details class="memory-deep-dive">
+        <summary>④ 存哪里？（易失 vs 持久）</summary>
+        <ul>
+          <li><strong>关机就没</strong>：内存里的工作区、回合摘要列表、会话级消息历史——像当天工作台。</li>
+          <li><strong>落盘长期</strong>：第一层索引、第二层事实、第三层流程说明与脚本、第四层归档；另有临时目录中的模型往来日志作归档原料。</li>
+        </ul>
+      </details>
+      <details class="memory-deep-dive">
+        <summary>⑤ 怎么用？（模型怎么「看见」记忆）</summary>
+        <ul>
+          <li><strong>始终看见</strong>：系统说明里的第一层索引全文（地图）。</li>
+          <li><strong>每轮强化</strong>：用户侧锚点（最近摘要 + 工作要点便签）。</li>
+          <li><strong>按需深挖</strong>：用读文件工具打开第二层、第三层细节，避免把全书塞进上下文。</li>
+        </ul>
+      </details>
+
+      <table class="timing-table">
+        <thead>
+          <tr>
+            <th>时机（人话）</th>
+            <th>做什么</th>
+            <th>在程序里大致对应（自然语言）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>启动任务</td>
+            <td>拼系统提示：角色说明、当天日期、第一层索引全文与目录说明</td>
+            <td>主入口模块里「组装系统提示」的步骤，并调用「读取全局记忆索引块」</td>
+          </tr>
+          <tr>
+            <td>每轮工具循环</td>
+            <td>执行模型选中的动作；下一轮用户侧带上工作锚点</td>
+            <td>多轮调度主循环、具体动作分发器、以及「拼工作记忆锚点」</td>
+          </tr>
+          <tr>
+            <td>每轮末尾</td>
+            <td>记下本轮摘要；在第 7、10、65 轮等节点插入提醒或重刷索引</td>
+            <td>每轮结束时的回调：更新摘要链、按轮次追加系统提醒</td>
+          </tr>
+          <tr>
+            <td>结算长期记忆</td>
+            <td>读出写入规范，再指导模型用小改动更新各层文件</td>
+            <td>「开始长期记忆更新」这一工具所触发的结算流程</td>
+          </tr>
+          <tr>
+            <td>省长度（对话）</td>
+            <td>把旧消息里的长标签缩短、删掉太早的回合</td>
+            <td>大模型会话模块里的「压缩历史标签」与「裁剪消息列表」</td>
+          </tr>
+          <tr>
+            <td>归档会话</td>
+            <td>把原始往来记录批量压缩进归档层</td>
+            <td>定时调度里调用的「会话日志批处理」</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 1520" role="img" aria-label="GenericAgent 记忆系统流程图">
+        <title>GenericAgent 记忆系统详细流程图</title>
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+          </marker>
+          <marker id="arr2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+          </marker>
+          <filter id="sd" x="-15%" y="-15%" width="130%" height="130%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.12"/>
+          </filter>
+          <linearGradient id="gSrc" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#fef9c3"/><stop offset="100%" style="stop-color:#fde68a"/>
+          </linearGradient>
+          <linearGradient id="gWhen" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#dbeafe"/><stop offset="100%" style="stop-color:#bfdbfe"/>
+          </linearGradient>
+          <linearGradient id="gProc" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#e0e7ff"/><stop offset="100%" style="stop-color:#c7d2fe"/>
+          </linearGradient>
+          <linearGradient id="gStore" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#d1fae5"/><stop offset="100%" style="stop-color:#a7f3d0"/>
+          </linearGradient>
+          <linearGradient id="gUse" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#fce7f3"/><stop offset="100%" style="stop-color:#fbcfe8"/>
+          </linearGradient>
+        </defs>
+        <rect x="8" y="8" width="904" height="1504" rx="16" fill="#fafaf9" stroke="#e7e5e4" stroke-width="2"/>
+        <text x="460" y="40" text-anchor="middle" font-size="21" font-weight="800" fill="#0c4a6e" font-family="system-ui,sans-serif">🗂️ GenericAgent 记忆系统 — 从原料到再注入</text>
+        <text x="460" y="64" text-anchor="middle" font-size="12.5" fill="#57534e" font-family="system-ui,sans-serif">泳道图：来源（黄）→ 时机（蓝）→ 处理（紫）→ 存储（绿）→ 使用（粉）→ 闭环回家</text>
+        <text x="460" y="82" text-anchor="middle" font-size="11" fill="#94a3b8" font-family="system-ui,sans-serif">对照上文「时机 × 落点」表阅读；虚线箭头 = 读盘喂回模型</text>
+
+        <!-- Lane titles -->
+        <text x="24" y="118" font-size="12" font-weight="700" fill="#78716c" font-family="system-ui,sans-serif">① 从哪来</text>
+        <text x="24" y="298" font-size="12" font-weight="700" fill="#78716c" font-family="system-ui,sans-serif">② 何时</text>
+        <text x="24" y="568" font-size="12" font-weight="700" fill="#78716c" font-family="system-ui,sans-serif">③ 怎么</text>
+        <text x="24" y="738" font-size="12" font-weight="700" fill="#78716c" font-family="system-ui,sans-serif">处理</text>
+        <text x="24" y="918" font-size="12" font-weight="700" fill="#78716c" font-family="system-ui,sans-serif">④ 存哪</text>
+        <text x="24" y="1128" font-size="12" font-weight="700" fill="#78716c" font-family="system-ui,sans-serif">⑤ 怎么用</text>
+
+        <!-- ① Sources -->
+        <g filter="url(#sd)">
+          <rect x="100" y="88" width="190" height="72" rx="10" fill="url(#gSrc)" stroke="#ca8a04" stroke-width="1.5"/>
+          <text x="195" y="118" text-anchor="middle" font-size="12" font-weight="600" fill="#422006" font-family="system-ui,sans-serif">用户输入 / 任务目标</text>
+          <text x="195" y="138" text-anchor="middle" font-size="11" fill="#713f12" font-family="system-ui,sans-serif">对话里提出的需求、约束</text>
+
+          <rect x="310" y="88" width="200" height="72" rx="10" fill="url(#gSrc)" stroke="#ca8a04" stroke-width="1.5"/>
+          <text x="410" y="115" text-anchor="middle" font-size="12" font-weight="600" fill="#422006" font-family="system-ui,sans-serif">工具「验证过」的结果 ★</text>
+          <text x="410" y="135" text-anchor="middle" font-size="11" fill="#713f12" font-family="system-ui,sans-serif">执行脚本、读文件、网页操作等 成功返回</text>
+          <text x="410" y="150" text-anchor="middle" font-size="10" fill="#a16207" font-family="system-ui,sans-serif">公理：无执行 → 不写磁盘记忆</text>
+
+          <rect x="530" y="88" width="170" height="72" rx="10" fill="url(#gSrc)" stroke="#ca8a04" stroke-width="1.5"/>
+          <text x="615" y="118" text-anchor="middle" font-size="12" font-weight="600" fill="#422006" font-family="system-ui,sans-serif">模型单行摘要</text>
+          <text x="615" y="138" text-anchor="middle" font-size="11" fill="#713f12" font-family="system-ui,sans-serif">进入回合摘要列表</text>
+
+          <rect x="720" y="88" width="182" height="72" rx="10" fill="url(#gSrc)" stroke="#ca8a04" stroke-width="1.5"/>
+          <text x="811" y="115" text-anchor="middle" font-size="12" font-weight="600" fill="#422006" font-family="system-ui,sans-serif">检查点 / 外部注入</text>
+          <text x="811" y="135" text-anchor="middle" font-size="11" fill="#713f12" font-family="system-ui,sans-serif">更新工作检查点</text>
+          <text x="811" y="150" text-anchor="middle" font-size="10" fill="#a16207" font-family="system-ui,sans-serif">外部要点 / 干预条子文件</text>
+        </g>
+        <path d="M195 160 L195 178 L460 178 L460 192" fill="none" stroke="#334155" stroke-width="1.8" marker-end="url(#arr)"/>
+        <path d="M410 160 L410 175" fill="none" stroke="#334155" stroke-width="1.8" marker-end="url(#arr)"/>
+        <path d="M615 160 L615 172 L460 172" fill="none" stroke="#334155" stroke-width="1.8"/>
+        <path d="M811 160 L811 170 L460 170" fill="none" stroke="#334155" stroke-width="1.8"/>
+        <circle cx="460" cy="178" r="4" fill="#334155"/>
+
+        <!-- ② When -->
+        <rect x="100" y="192" width="720" height="268" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="120" y="214" font-size="13" font-weight="700" fill="#1e40af" font-family="system-ui,sans-serif">② 何时处理「与记忆相关的逻辑」</text>
+
+        <g filter="url(#sd)">
+          <rect x="120" y="228" width="200" height="56" rx="10" fill="url(#gWhen)" stroke="#2563eb" stroke-width="1.5"/>
+          <text x="220" y="252" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1e3a8a" font-family="system-ui,sans-serif">进程 / 任务启动</text>
+          <text x="220" y="270" text-anchor="middle" font-size="10.5" fill="#1d4ed8" font-family="system-ui,sans-serif">组装系统提示并挂载全局索引</text>
+
+          <rect x="340" y="228" width="220" height="56" rx="10" fill="url(#gWhen)" stroke="#2563eb" stroke-width="1.5"/>
+          <text x="450" y="252" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1e3a8a" font-family="system-ui,sans-serif">每一轮工具循环内</text>
+          <text x="450" y="270" text-anchor="middle" font-size="10.5" fill="#1d4ed8" font-family="system-ui,sans-serif">主循环进入动作分发</text>
+
+          <rect x="580" y="228" width="220" height="56" rx="10" fill="url(#gWhen)" stroke="#2563eb" stroke-width="1.5"/>
+          <text x="690" y="252" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1e3a8a" font-family="system-ui,sans-serif">每轮末尾回调</text>
+          <text x="690" y="270" text-anchor="middle" font-size="10.5" fill="#1d4ed8" font-family="system-ui,sans-serif">记摘要 · 第 7/10/65 轮等提醒</text>
+        </g>
+
+        <rect x="120" y="298" width="680" height="100" rx="12" fill="#fff" stroke="#3b82f6" stroke-width="2"/>
+        <text x="460" y="322" text-anchor="middle" font-size="13" font-weight="700" fill="#1e40af" font-family="system-ui,sans-serif">主循环（抽象）</text>
+        <text x="460" y="344" text-anchor="middle" font-size="11" fill="#475569" font-family="system-ui,sans-serif">向模型提问并带工具 → 解析工具调用 → 执行动作 → 收集结果 → 拼下一轮用户内容</text>
+        <text x="140" y="368" font-size="10.5" fill="#64748b" font-family="system-ui,sans-serif">• 每轮：用户侧附上工作记忆锚点（历史摘要 + 工作要点 + 可选流程说明）</text>
+        <text x="140" y="386" font-size="10.5" fill="#64748b" font-family="system-ui,sans-serif">• 每满十轮：再注入整段第一层索引；并周期性清空工具说明缓存</text>
+
+        <g filter="url(#sd)">
+          <rect x="120" y="412" width="320" height="52" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+          <text x="280" y="436" text-anchor="middle" font-size="11.5" font-weight="600" fill="#78350f" font-family="system-ui,sans-serif">读 memory/ 或 *.sop 时（读文件）</text>
+          <text x="280" y="452" text-anchor="middle" font-size="10" fill="#92400e" font-family="system-ui,sans-serif">提示：若按流程说明执行 → 考虑更新工作检查点</text>
+
+          <rect x="460" y="412" width="340" height="52" rx="10" fill="#fecaca" stroke="#dc2626" stroke-width="1.5"/>
+          <text x="630" y="436" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7f1d1d" font-family="system-ui,sans-serif">任务结束或长任务后 · 模型调用</text>
+          <text x="630" y="452" text-anchor="middle" font-size="10" fill="#991b1b" font-family="system-ui,sans-serif">长期记忆更新 → 进入「结算回合」</text>
+        </g>
+
+        <path d="M460 398 L460 430" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+        <path d="M630 464 L630 492 L280 492 L280 552" fill="none" stroke="#b91c1c" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- ③ How process -->
+        <rect x="100" y="520" width="720" height="200" rx="14" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="120" y="542" font-size="13" font-weight="700" fill="#5b21b6" font-family="system-ui,sans-serif">③ 怎么处理（写入磁盘前）</text>
+
+        <g filter="url(#sd)">
+          <rect x="120" y="552" width="150" height="70" rx="10" fill="url(#gProc)" stroke="#6366f1" stroke-width="1.5"/>
+          <text x="195" y="578" text-anchor="middle" font-size="11" font-weight="600" fill="#312e81" font-family="system-ui,sans-serif">读第零层规范</text>
+          <text x="195" y="600" text-anchor="middle" font-size="9.5" fill="#4338ca" font-family="system-ui,sans-serif">记忆写入规范</text>
+          <text x="195" y="614" text-anchor="middle" font-size="9.5" fill="#4338ca" font-family="system-ui,sans-serif">（第零层）</text>
+
+          <rect x="290" y="552" width="160" height="70" rx="10" fill="url(#gProc)" stroke="#6366f1" stroke-width="1.5"/>
+          <text x="370" y="578" text-anchor="middle" font-size="11" font-weight="600" fill="#312e81" font-family="system-ui,sans-serif">分类决策</text>
+          <text x="370" y="596" text-anchor="middle" font-size="9.5" fill="#4338ca" font-family="system-ui,sans-serif">事实→第二层 规则→第一层</text>
+          <text x="370" y="610" text-anchor="middle" font-size="9.5" fill="#4338ca" font-family="system-ui,sans-serif">任务坑→第三层</text>
+
+          <rect x="470" y="552" width="170" height="70" rx="10" fill="url(#gProc)" stroke="#6366f1" stroke-width="1.5"/>
+          <text x="555" y="578" text-anchor="middle" font-size="11" font-weight="600" fill="#312e81" font-family="system-ui,sans-serif">先读文件现状</text>
+          <text x="555" y="596" text-anchor="middle" font-size="9.5" fill="#4338ca" font-family="system-ui,sans-serif">确认行号与内容</text>
+
+          <rect x="660" y="552" width="140" height="70" rx="10" fill="url(#gProc)" stroke="#6366f1" stroke-width="1.5"/>
+          <text x="730" y="578" text-anchor="middle" font-size="11" font-weight="600" fill="#312e81" font-family="system-ui,sans-serif">补丁式改文件</text>
+          <text x="730" y="596" text-anchor="middle" font-size="9.5" fill="#4338ca" font-family="system-ui,sans-serif">old 唯一匹配</text>
+          <text x="730" y="610" text-anchor="middle" font-size="9.5" fill="#4338ca" font-family="system-ui,sans-serif">或大段写入文件</text>
+        </g>
+        <text x="120" y="642" font-size="10.5" fill="#6b21a8" font-family="system-ui,sans-serif">并行另一条线（对话上下文，非磁盘）：压缩历史长标签、裁剪过早消息，给会话历史瘦身</text>
+
+        <path d="M270 587 L288 587" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#arr2)"/>
+        <path d="M450 587 L468 587" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#arr2)"/>
+        <path d="M640 587 L658 587" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#arr2)"/>
+
+        <!-- ④ Storage -->
+        <g filter="url(#sd)">
+          <rect x="100" y="668" width="130" height="88" rx="10" fill="url(#gStore)" stroke="#059669" stroke-width="1.5"/>
+          <text x="165" y="692" text-anchor="middle" font-size="11" font-weight="700" fill="#064e3b" font-family="system-ui,sans-serif">内存</text>
+          <text x="165" y="710" text-anchor="middle" font-size="9.5" fill="#047857" font-family="system-ui,sans-serif">工作区字典</text>
+          <text x="165" y="724" text-anchor="middle" font-size="9.5" fill="#047857" font-family="system-ui,sans-serif">回合摘要列表</text>
+          <text x="165" y="738" text-anchor="middle" font-size="9.5" fill="#047857" font-family="system-ui,sans-serif">会话消息链</text>
+
+          <rect x="248" y="668" width="115" height="88" rx="10" fill="url(#gStore)" stroke="#059669" stroke-width="1.5"/>
+          <text x="305" y="692" text-anchor="middle" font-size="11" font-weight="700" fill="#064e3b" font-family="system-ui,sans-serif">第一层·磁盘</text>
+          <text x="305" y="718" text-anchor="middle" font-size="9" fill="#047857" font-family="system-ui,sans-serif">第一层索引文件</text>
+          <text x="305" y="736" text-anchor="middle" font-size="8.5" fill="#059669" font-family="system-ui,sans-serif">关键词指针 · 红线规则</text>
+
+          <rect x="381" y="668" width="115" height="88" rx="10" fill="url(#gStore)" stroke="#059669" stroke-width="1.5"/>
+          <text x="438" y="692" text-anchor="middle" font-size="11" font-weight="700" fill="#064e3b" font-family="system-ui,sans-serif">第二层·磁盘</text>
+          <text x="438" y="710" text-anchor="middle" font-size="9" fill="#047857" font-family="system-ui,sans-serif">全局事实稿</text>
+          <text x="438" y="728" text-anchor="middle" font-size="8.5" fill="#059669" font-family="system-ui,sans-serif">环境事实</text>
+
+          <rect x="514" y="668" width="115" height="88" rx="10" fill="url(#gStore)" stroke="#059669" stroke-width="1.5"/>
+          <text x="571" y="692" text-anchor="middle" font-size="11" font-weight="700" fill="#064e3b" font-family="system-ui,sans-serif">第三层·磁盘</text>
+          <text x="571" y="710" text-anchor="middle" font-size="9" fill="#047857" font-family="system-ui,sans-serif">技能目录说明稿</text>
+          <text x="571" y="724" text-anchor="middle" font-size="9" fill="#047857" font-family="system-ui,sans-serif">自动化小脚本</text>
+
+          <rect x="647" y="668" width="115" height="88" rx="10" fill="url(#gStore)" stroke="#059669" stroke-width="1.5"/>
+          <text x="704" y="692" text-anchor="middle" font-size="11" font-weight="700" fill="#064e3b" font-family="system-ui,sans-serif">第四层·磁盘</text>
+          <text x="704" y="710" text-anchor="middle" font-size="9" fill="#047857" font-family="system-ui,sans-serif">按会话</text>
+          <text x="704" y="724" text-anchor="middle" font-size="9" fill="#047857" font-family="system-ui,sans-serif">分目录归档</text>
+          <text x="704" y="742" text-anchor="middle" font-size="8.5" fill="#059669" font-family="system-ui,sans-serif">定时压缩归档</text>
+
+          <rect x="780" y="668" width="40" height="88" rx="8" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1"/>
+          <text x="800" y="708" text-anchor="middle" font-size="8" fill="#047857" font-family="system-ui,sans-serif" transform="rotate(-90 800 708)">日志</text>
+          <text x="800" y="728" text-anchor="middle" font-size="7.5" fill="#059669" font-family="system-ui,sans-serif" transform="rotate(-90 800 728)">模型往来</text>
+        </g>
+        <path d="M730 610 L730 650 L165 650 L165 668" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="400" y="662" text-anchor="middle" font-size="10" fill="#047857" font-family="system-ui,sans-serif">补丁或整段写入落盘</text>
+
+        <!-- ⑤ Use -->
+        <rect x="100" y="780" width="720" height="200" rx="14" fill="#fdf2f8" stroke="#db2777" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="120" y="802" font-size="13" font-weight="700" fill="#9d174d" font-family="system-ui,sans-serif">⑤ 怎么使用（读回 → 再喂给模型）</text>
+
+        <g filter="url(#sd)">
+          <rect x="120" y="814" width="200" height="76" rx="10" fill="url(#gUse)" stroke="#db2777" stroke-width="1.5"/>
+          <text x="220" y="840" text-anchor="middle" font-size="11.5" font-weight="600" fill="#831843" font-family="system-ui,sans-serif">系统提示（每任务）</text>
+          <text x="220" y="858" text-anchor="middle" font-size="10" fill="#9f1239" font-family="system-ui,sans-serif">角色 + 当天日期 + 第一层全文</text>
+          <text x="220" y="874" text-anchor="middle" font-size="9.5" fill="#be185d" font-family="system-ui,sans-serif">读取全局索引块</text>
+
+          <rect x="340" y="814" width="200" height="76" rx="10" fill="url(#gUse)" stroke="#db2777" stroke-width="1.5"/>
+          <text x="440" y="840" text-anchor="middle" font-size="11.5" font-weight="600" fill="#831843" font-family="system-ui,sans-serif">用户侧锚点（每轮）</text>
+          <text x="440" y="858" text-anchor="middle" font-size="10" fill="#9f1239" font-family="system-ui,sans-serif">历史摘录 + 工作要点</text>
+          <text x="440" y="874" text-anchor="middle" font-size="9.5" fill="#be185d" font-family="system-ui,sans-serif">工作记忆锚点拼接</text>
+
+          <rect x="560" y="814" width="240" height="76" rx="10" fill="url(#gUse)" stroke="#db2777" stroke-width="1.5"/>
+          <text x="680" y="840" text-anchor="middle" font-size="11.5" font-weight="600" fill="#831843" font-family="system-ui,sans-serif">按需深挖</text>
+          <text x="680" y="858" text-anchor="middle" font-size="10" fill="#9f1239" font-family="system-ui,sans-serif">按需读事实库 / 任务说明 / 流程规范</text>
+          <text x="680" y="874" text-anchor="middle" font-size="9.5" fill="#be185d" font-family="system-ui,sans-serif">不把第二层全文默认塞进系统说明</text>
+        </g>
+
+        <path d="M165 756 L165 770 L220 770 L220 814" fill="none" stroke="#db2777" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr2)"/>
+        <path d="M305 756 L305 770 L440 770 L440 814" fill="none" stroke="#db2777" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr2)"/>
+        <path d="M571 756 L571 770 L680 770 L680 814" fill="none" stroke="#db2777" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr2)"/>
+
+        <!-- Feedback loop -->
+        <path class="mem-loop" d="M680 890 C 820 890 860 950 860 1020 C 860 1120 700 1180 460 1180 C 220 1180 60 1080 60 980 C 60 900 120 840 220 814" fill="none" stroke="#0c4a6e" stroke-width="2" stroke-dasharray="8 4" marker-end="url(#arr)"/>
+        <text x="780" y="1040" font-size="11" font-weight="600" fill="#0c4a6e" font-family="system-ui,sans-serif">闭环：下一轮 / 下一任务继续用</text>
+        <text x="780" y="1056" font-size="10" fill="#0369a1" font-family="system-ui,sans-serif">新任务可继承上一任务的工作要点（应用入口里处理）</text>
+
+        <!-- Bottom legend box -->
+        <rect x="100" y="1220" width="720" height="268" rx="12" fill="#fff" stroke="#d6d3d1" stroke-width="1.5"/>
+        <text x="120" y="1245" font-size="12" font-weight="700" fill="#44403c" font-family="system-ui,sans-serif">📋 对照表（速查 · 与上表 HTML 一致）</text>
+        <text x="130" y="1270" font-size="10.5" fill="#57534e" font-family="monospace">记忆从哪来</text>
+        <text x="280" y="1270" font-size="10.5" fill="#292524" font-family="system-ui,sans-serif">用户话、工具成功结果、单行摘要、检查点、外部塞条子文件</text>
+        <text x="130" y="1292" font-size="10.5" fill="#57534e" font-family="monospace">何时处理</text>
+        <text x="280" y="1292" font-size="10.5" fill="#292524" font-family="system-ui,sans-serif">启动注入第一层索引；每轮锚点；逢十轮重贴索引；读流程说明时提示；长期记忆结算回合；定时任务写入第四层</text>
+        <text x="130" y="1314" font-size="10.5" fill="#57534e" font-family="monospace">怎么处理</text>
+        <text x="280" y="1314" font-size="10.5" fill="#292524" font-family="system-ui,sans-serif">遵守写入规范；分类；先读后改；对话侧压缩与裁剪</text>
+        <text x="130" y="1336" font-size="10.5" fill="#57534e" font-family="monospace">存哪里</text>
+        <text x="280" y="1336" font-size="10.5" fill="#292524" font-family="system-ui,sans-serif">工作区、摘要列表、会话历史（易失）；一至四层磁盘与临时往来日志（持久）</text>
+        <text x="130" y="1358" font-size="10.5" fill="#57534e" font-family="monospace">怎么用</text>
+        <text x="280" y="1358" font-size="10.5" fill="#292524" font-family="system-ui,sans-serif">系统说明带第一层；用户侧带锚点；工具读第二、三层细节</text>
+        <text x="120" y="1390" font-size="10" fill="#78716c" font-family="system-ui,sans-serif">实现落点：应用入口（系统提示）、核心处理器（全局记忆与工具）、主循环、会话模块（裁剪历史）、反思目录下的定时调度</text>
+        <text x="120" y="1415" font-size="10" fill="#a8a29e" font-family="system-ui,sans-serif">★ 只有「工具验证过」或明确允许的文本才应写入一至三层 — 《记忆管理规范》公理</text>
+      </svg>
+      <div class="flow-legend" aria-hidden="true">
+        <span><i style="background:linear-gradient(180deg,#fde68a,#fef9c3)"></i>来源</span>
+        <span><i style="background:linear-gradient(180deg,#bfdbfe,#dbeafe)"></i>时机</span>
+        <span><i style="background:linear-gradient(180deg,#c7d2fe,#e0e7ff)"></i>处理方式</span>
+        <span><i style="background:linear-gradient(180deg,#a7f3d0,#d1fae5)"></i>存储介质</span>
+        <span><i style="background:linear-gradient(180deg,#fbcfe8,#fce7f3)"></i>再注入使用</span>
+        <span><i style="background:transparent;border:2px dashed #0c4a6e"></i>闭环</span>
+      </div>
+    </section>
+
+    <section id="s1">
+      <h2>1. 为何需要「分层记忆」</h2>
+      <p>大模型的上下文像<strong>一张越来越挤的办公桌</strong>：什么都往上堆，很快看不清重点，还贵。GenericAgent 的做法是：<strong>办公桌只留便签 + 当前文件夹</strong>，大部头书放进<strong>分层书架</strong>（磁盘）。书架上贴<strong>极短索引</strong>（第一层），正文按<strong>环境 / 任务</strong>分格（第二、三层），需要哪一页再伸手去拿（读文件工具），而不是把整库复印到桌上。</p>
+      <p>这样同一套智能体循环能跑很久，「技能」长出来的是<strong>第三层的流程说明与小脚本</strong>、<strong>第二层里经工具验证的事实</strong>，而不是把每个业务写成「如果用户说了某句就分支」的硬编码。</p>
+      <div class="callout tip">
+        <strong>核心直觉：</strong>对话 = <strong>工作记忆 + 当场推理</strong>；磁盘 = <strong>可版本管理的长期手册</strong>。二者靠<strong>第一层指针 + 工具读写</strong>拧在一起；没有工具跑通，就不该往手册里写「事实」。
+      </div>
+      <div class="callout ok">
+        <strong>生动对比：</strong>若把全部记忆塞进系统提示，像每天背整本电话簿打电话；分层记忆则是<strong>只背人名索引，拨号前再翻页</strong>——省长度、少幻觉、多省钱。
+      </div>
+    </section>
+
+    <section id="s2">
+      <h2>2. 第零至四层：磁盘上的记忆拓扑</h2>
+      <p>规范集中在记忆目录下的《记忆管理规范》（下文有时简称「写入规范」）。层级含义如下。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>层级</th>
+            <th>典型路径</th>
+            <th>职责（一句话）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>第零层</strong></td>
+            <td>《记忆管理规范》文档本身</td>
+            <td>定义「能写什么 / 写哪 / 禁止什么」的元规范；「开始长期记忆更新」工具 会把它读给模型作结算依据。</td>
+          </tr>
+          <tr>
+            <td><strong>第一层</strong></td>
+            <td>记忆目录里的全局索引便签</td>
+            <td>极简索引（硬约束约 ≤30 行）：场景关键词指向第二、三层位置；红线与高频错规则区只压缩要点。<strong>不写长篇操作步骤、不写密钥、不写任务技术细节。</strong></td>
+          </tr>
+          <tr>
+            <td><strong>第二层</strong></td>
+            <td>记忆目录里的全局事实库</td>
+            <td>环境特异性事实：路径、配置、凭证位置等，按分节标题组织；可随环境变长。</td>
+          </tr>
+          <tr>
+            <td><strong>第三层</strong></td>
+            <td>记忆目录下各类说明文档、可复用的小脚本</td>
+            <td>任务级可复用资产：某类任务的标准操作流程短文（关键前置 + 典型坑）、可复用脚本。只存「难重建」的要点。</td>
+          </tr>
+          <tr>
+            <td><strong>第四层</strong></td>
+            <td>归档根目录（按会话分桶）</td>
+            <td>历史会话压缩归档；原料来自 临时目录中的模型往来日志 等，由调度器周期性批处理。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>第一层与第二、三层的<strong>同步规则</strong>（增删改场景、何时动红线区）也在《记忆管理规范》的表格与红线说明里；原则是：<strong>第一层只导航，不搬运细节</strong>。</p>
+
+      <h3 id="s2-real">2.1 补充：真实仓库里的记忆目录长什么样</h3>
+      <p>下面描述的是<strong>本仓库实际采用</strong>的布局与「打开文件时你会看到什么」，便于把抽象分层对应到磁盘上的真实面貌（与个人本机长期使用后的差异见下）。</p>
+
+      <p><strong>放在哪：</strong>与主程序同级、项目根下的 <strong>memory</strong> 文件夹。启动时会确保该文件夹存在；若还没有第一层索引或第二层事实文件，会从资源目录里的模板拷贝第一层草稿，或给第二层写一个只有标题行的空壳，避免首次运行报缺文件。</p>
+
+      <p><strong>和 Git 的关系（很重要）：</strong>默认配置里，<strong>memory 下大部分文件会被版本控制忽略</strong>，仓库里主要<strong>显式放行</strong>的是《记忆管理规范》、各类流程说明稿、部分可复用脚本、第四层目录下的压缩脚本等。因此你<strong>克隆下来的树</strong>往往以第三层「技能稿 + 工具脚本」为主；<strong>第一层索引、第二层事实、第四层归档出来的会话包</strong>等多半只在<strong>本机跑过 Agent 之后</strong>才稳定出现，且通常不会提交到远端。</p>
+
+      <p><strong>目录在磁盘上大致分这几类（自然语言树）：</strong></p>
+      <ul>
+        <li><strong>第零层</strong>：《记忆管理规范》稿，一篇较长的 Markdown，分段写公理、层级职责、允许与禁止事项。</li>
+        <li><strong>第一层</strong>：约定文件名为全局索引便签（仓库里常用 <strong>global_mem_insight.txt</strong>）。体量被规范压得很扁；打开后像一张「能力菜单 + 红线便签」——前几行往往是「某类场景 → 去哪个第三层说明或脚本」的极短对照；中间可能有一句提醒：需要细节时去读第二层或浏览第三层目录；再往下会列出第零、二、三、四层的<strong>指针说明</strong>（告诉模型各层文件叫什么、去哪找）；最后是一块<strong>红线规则</strong>，用编号短句写搜索习惯、编码安全、进程操作禁忌等，不写长篇操作步骤。</li>
+        <li><strong>第二层</strong>：约定文件名为全局事实库（常用 <strong>global_mem.txt</strong>）。Markdown 分节风格，按「环境路径、偏好、机器相关」等小节堆<strong>经工具验证过</strong>的事实；新机或新克隆可能几乎只有一节标题，内容随任务慢慢变厚。</li>
+        <li><strong>第三层</strong>：与记忆根目录<strong>平铺或再分子文件夹</strong>——大量 <strong>流程说明稿</strong>（任务怎么拆、常见坑）、以及 <strong>可 import 的小工具脚本</strong>（自动化某一步）；复杂能力会占一整子目录（里面还能再带说明稿与辅助脚本）。这是仓库里<strong>最容易在 Git 里直接看到</strong>的一层。</li>
+        <li><strong>第四层</strong>：通常在 <strong>L4_raw_sessions</strong> 一类目录里做会话归档；仓库里往往只跟踪「如何把原始日志压成归档」的脚本，<strong>真正归档生成的一大堆数据文件</strong>多在本机、且常被忽略规则排除。</li>
+      </ul>
+
+      <p><strong>系统提示里除了第一层全文，还会多贴一段「固定结构说明」：</strong>它来自资源目录下的短文（与第一层文件不是同一个），用几行字说明——事实库路径、流程稿与脚本在哪、第零层规范文件名、当前工作目录约定，以及几条总宪法式的行为红线（例如改记忆前要先读规范、记忆目录里优先用小补丁而不是整文件覆盖）。模型每次开任务都会同时看到<strong>这段固定说明 + 第一层便签全文</strong>，所以第一层里不必重复写目录教程，只保留索引与红线即可。</p>
+
+      <div class="callout tip">
+        <strong>对照小技巧：</strong>若你想看「官方示例第一层长什么样」，可读资源目录里的<strong>第一层模板</strong>（与运行时第一层同名但带 template 字样）；运行时第一层是在此基础上、由你与 Agent 长期协作改出来的「个人版菜单」。具体落盘内容请以本机记忆目录与工具执行结果为准，本文不附可点开的示例文件正文。
+      </div>
+    </section>
+
+    <section id="s3">
+      <h2>3. 四大公理与工程含义</h2>
+      <p>《记忆管理规范》开头的公理，直接决定「智能体能不能把胡编写进磁盘」。</p>
+      <div class="card">
+        <h3>3.1 行动验证（只认跑通的结果）</h3>
+        <p>写入一至三层的内容须能追溯到<strong>成功的工具结果</strong>（如读文件确认、本地命令执行成功）。<strong>禁止</strong>把模型臆测、未执行计划当事实。一句话：<strong>没有动手验证，就不当事实写进档案。</strong></p>
+        <p><strong>工程含义：</strong>「自我进化」不是后台静默从日志抽技能，而是模型在<strong>结算轮</strong>里按写入规范用「按唯一旧片段替换」等改文件动作<strong>主动、可审计地</strong>改磁盘。</p>
+      </div>
+      <div class="card">
+        <h3>3.2 神圣不可删改（对已验证数据）</h3>
+        <p>重构或清理时不可丢准确性；可压缩、可迁层（如事实迁到任务说明），但信息要可追溯。操作上偏好<strong>小步补丁</strong>，避免整文件覆盖。</p>
+      </div>
+      <div class="card">
+        <h3>3.3 禁止易变状态</h3>
+        <p>不存进程号、临时会话标识、易变绝对路径等。否则记忆很快「腐烂」，还会误导后续任务。</p>
+      </div>
+      <div class="card">
+        <h3>3.4 最小充分指针</h3>
+        <p>上层索引只保留能定位到下层的最短关键词；多写一词就多占第一层行数预算、多引入噪声。</p>
+      </div>
+    </section>
+
+    <section id="s4">
+      <h2>4. 「这条信息放哪？」决策树</h2>
+      <p>记忆流程规范用决策树归纳；掌握它可避免「全塞进事实库」或「把常识当宝贝存」。</p>
+      <ul>
+        <li><strong>环境特异、模型零样本猜不准的事实</strong> → <strong>第二层</strong>，高频场景再在<strong>第一层</strong>加「关键词 → 目标位置」指针。</li>
+        <li><strong>全局操作规律、与具体任务无关</strong> → 压成一句进<strong>第一层红线区</strong>。</li>
+        <li><strong>某任务特有、踩坑代价高、未来还要用</strong> → <strong>第三层</strong>（流程说明或可执行小脚本）。</li>
+        <li><strong>通用常识或几次探测就能重建的信息</strong> → <strong>不存</strong>。</li>
+      </ul>
+    </section>
+
+    <section id="s5">
+      <h2>5. 启动时：系统提示如何注入第一层索引</h2>
+      <p>主入口里组装系统提示 读取 角色与行为总则模板，追加日期，再追加 读取全局记忆索引供提示使用。</p>
+      <p>读取全局索引块 会读取：</p>
+      <ul>
+        <li>记忆目录里的全局索引便签（第一层全文），</li>
+        <li>说明记忆目录结构的模板文（目录结构说明），</li>
+        <li>并提示工作目录 临时工作目录 路径。</li>
+      </ul>
+      <p>因此<strong>每次开任务</strong>，模型都「看见」当前第一层索引与记忆树形状；细节仍在磁盘，按需读文件。</p>
+      <p>首次运行：应用主入口若发现没有全局事实库文件或全局索引便签文件，会创建空文件或从模板拷贝索引草稿。</p>
+    </section>
+
+    <section id="s6">
+      <h2>6. 任务内：处理器与工作记忆</h2>
+      <p>通用智能体动作处理器（动作与记忆工具实现文件）维护两类与「当前任务」强相关的状态：</p>
+      <ul>
+        <li><strong>当前任务工作区字典</strong>：如工作要点便签（短记事本）、建议重读的操作说明名、是否处于分步计划模式（及计划文件路径）等。</li>
+        <li><strong>摘要链列表</strong>：字符串列表；每轮结束从回复里的「单行摘要」约定段或工具摘要里再记一行，形成<strong>人类可读的回合摘要链</strong>。</li>
+      </ul>
+      <h3>6.1 锚点注入</h3>
+      <p>多数工具在返回前会拼接<strong>工作记忆锚点</strong>；同一轮里若连续多个工具，通常只对第一个附完整锚点，避免重复。注入内容包括：</p>
+      <ul>
+        <li>最近约 <strong>20 条</strong>回合摘要，包在「历史摘录」区块里；</li>
+        <li>当前是第几轮；</li>
+        <li>若有：工作要点便签、建议重读哪份操作说明。</li>
+      </ul>
+      <p>这相当于在<strong>不无限拉长单次请求里的多轮历史</strong>的前提下，把「任务内工作记忆」反复贴回模型输入侧。</p>
+      <h3>6.2 更新工作检查点</h3>
+      <p>工具 「更新工作检查点」工具 更新 工作要点便签 / 建议重读的操作说明名，并把 跨对话继承计数 置 0。用于长任务中段保存约束与进度，避免上下文漂移。</p>
+    </section>
+
+    <section id="s7">
+      <h2>7. 轮次节奏：每轮结束时的回调</h2>
+      <p>每轮工具执行完，「每轮结束回调」会做这些事：</p>
+      <ul>
+        <li>解析模型是否写了单行摘要，写入回合摘要列表；没有就提醒补上。</li>
+        <li><strong>第 65 轮</strong>（且不在分步计划特殊模式）：强烈建议改为向用户提问、暂停瞎转。</li>
+        <li><strong>第 7 轮倍数</strong>：提醒禁止无新信息的死磕，可更新工作检查点。</li>
+        <li><strong>第 10 轮倍数</strong>：再次贴上<strong>整段第一层索引</strong>，防止长任务忘地图。</li>
+        <li>分步计划模式：周期性要求重新阅读计划文件核对进度；轮数过高则必须问用户。</li>
+        <li>若任务目录里有外部塞条子的文件，把内容合并进工作区或下一轮提示，并标成来自操作者。</li>
+      </ul>
+      <div class="callout ok">
+        <strong>记忆相关知识点：</strong>「每 10 轮刷第一层索引」不是换模型，而是<strong>防止长任务忘记全局地图</strong>；它与「每十轮强制重贴完整工具说明书」是两套不同的防膨胀手段，互不替代。
+      </div>
+    </section>
+
+    <section id="s8">
+      <h2>8. 长期结算：「开始长期记忆更新」</h2>
+      <p>当模型调用「开始长期记忆更新」，就进入<strong>记忆结算回合</strong>：</p>
+      <div class="flow">
+        <div class="flow-step" data-n="1">返回《记忆管理规范》全文（若存在），作为第零层规范。</div>
+        <div class="flow-step" data-n="2">拼接固定中文指令：提炼经行动验证的事实与经验，按类型写入第二、三层，并维护第一层；强调先读文件再尽量用「按唯一旧片段替换」做小改动。</div>
+        <div class="flow-step" data-n="3">再次附上 读取全局索引块，与当前全局索引对齐。</div>
+      </div>
+      <p>工具描述（含中文版参数约定）还要求<strong>超长任务（如 15+ 轮）结束后必须调用</strong>，把「记得沉淀」产品化为模型义务。注意：<strong>没有独立后台进程</strong>自动写技能说明；沉淀质量依赖模型是否遵守流程规范与公理。</p>
+    </section>
+
+    <section id="s9">
+      <h2>9. 主循环与会话历史</h2>
+      <p><strong>多轮工具主循环</strong>每一轮都会带工具列表去对话。第一轮消息里含系统角色说明和用户原话；之后每一轮往往只带<strong>本轮用户补充</strong>和<strong>各工具刚返回的结果</strong>——更长的往来记在<strong>会话对象内部</strong>，不全部重复塞进单轮请求。</p>
+      <p>另有策略：<strong>每十轮</strong>清空「工具说明缓存」，迫使下一轮重新附带完整工具说明书（与「每十轮重贴第一层索引」互补：一个防忘工具长什么样，一个防忘地图）。若单轮拼出来的提示过长，也会清空该缓存，避免模型以为还能调用工具却看不到说明书。</p>
+      <p>在<strong>原生工具调用</strong>路径下，底层会话接口把用户块追加进<strong>会话内部保存的对话链</strong>，再追加助手返回的结构化内容，与厂商接口对齐。因此「对话记忆」的权威副本在<strong>大模型连接模块里的会话对象</strong>，而不是主循环函数自己的临时列表。</p>
+      <p><strong>文本协议工具</strong>路径则把多轮内容拼成一大段约定格式的文字；多轮怎么堆叠取决于底层提问接口，与原生块结构不同。实际产品里常用原生路径。</p>
+      <h3>9.1 多后端切换时的 history</h3>
+      <p>轮换大模型客户端时，会把<strong>上一客户端里保存的完整对话链</strong>交给新客户端，保证对话线程不丢。若接入层拼装不当，这里会报错提示检查密钥与模型配置。这与磁盘一至四层无关，但属于「会话级记忆」连续性的关键实现。</p>
+    </section>
+
+    <section id="s10">
+      <h2>10. 对话历史压缩与裁剪（省上下文长度）</h2>
+      <p><strong>压缩历史消息里的长标签</strong>：按间隔对较早消息里的思考段、工具调用段、工具结果段以及历史摘录、工作要点等大段做截断，只留头尾、中间用省略表示。</p>
+      <p>按长度裁剪旧消息：当序列化长度超过阈值时，更激进压缩并<strong>从头部删消息</strong>，且保证从用户轮开始裁剪，必要时清理首条用户消息里<strong>悬空的工具调用痕迹</strong>。</p>
+      <p>这与磁盘第一层「控制索引行数」是同一哲学在<strong>内存与单次请求上下文</strong>上的映射。</p>
+    </section>
+
+    <section id="s11">
+      <h2>11. 第四层归档与定时调度</h2>
+      <p>写入模型往来日志等步骤，会把一问一答追加到<strong>临时目录下的模型响应日志</strong>里。</p>
+      <p>定时调度模块的调度入口里，约每 <strong>12 小时</strong>调用「会话归档批处理」，把<strong>原始往来日志</strong>批处理进第四层。这是<strong>与主智能体循环解耦</strong>的归档线，用于事后检索过往上下文，而不是替代一至三层的精炼知识。</p>
+    </section>
+
+    <section id="s12">
+      <h2>12. 工具与记忆的契约</h2>
+      <table>
+        <thead>
+          <tr><th>工具</th><th>与记忆的关系</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>「读取文件」的动作</td><td>读第二、三层或流程说明；路径落在记忆或流程目录时会提示结合规范更新工作记忆；并可记录记忆文件访问统计。</td></tr>
+          <tr><td>「按唯一旧片段替换」的改文件动作 / 「写入或追加文件」的动作</td><td>实际修改磁盘记忆与代码；长期结算主要依赖二者（加 从正文引用展开成片段）。</td></tr>
+          <tr><td>「更新工作检查点」工具</td><td>只改处理器内内存里的工作区，不直接写第二层、第三层磁盘文件。</td></tr>
+          <tr><td>「开始长期记忆更新」工具</td><td>触发「读写入规范 + 固定指令」的结算回合，驱动后续写一至三层磁盘。</td></tr>
+          <tr><td>「在本地执行脚本或命令」的动作</td><td>不自动写记忆；可运行自定义脚本处理环境，但记忆流程规范倾向<strong>小补丁改文件</strong>，而不是大范围改库式编辑。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s13">
+      <h2>13. 跨会话与飞书场景</h2>
+      <p>新任务创建新处理器实例时，应用主入口可把上一任务的工作要点便签拷入，并增加跨对话继承计数与系统提醒：若已是新任务应更新或清除工作记忆，避免旧任务记事污染新任务。</p>
+      <p>飞书来源且已有历史时，首轮用户内容会带上 拼接工作记忆锚点 再拼当前用户句，保证多消息会话仍带锚点。</p>
+    </section>
+
+    <section id="s14">
+      <h2>14. 常见误区与边界</h2>
+      <ul>
+        <li><strong>「自动进化」≠ 无模型参与：</strong>磁盘写入是模型在工具与写入规范约束下完成的，不是单独的离线挖掘管道。</li>
+        <li><strong>「技能树」主要是第一层索引 + 多份第三层文件</strong>，不是图数据库；检索靠关键词与读文件工具。</li>
+        <li><strong>可选的「技能卡检索」扩展</strong>是对外接口检索现成技能卡，与「本次任务自动沉淀到第三层」是两条线。</li>
+        <li><strong>安全：</strong>本地执行命令与写文件能力极强，记忆文件勿存密钥；公理与第一层红线也明确禁止。</li>
+      </ul>
+    </section>
+
+    <section id="s15">
+      <h2>15. 术语表与仓库索引</h2>
+      <table>
+        <thead>
+          <tr><th>术语</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>第零层</td><td>《记忆管理规范》本身，定义能写什么、写在哪、禁止什么。</td></tr>
+          <tr><td>第一层（索引便签）</td><td>全局索引便签文件，极短关键词指针与红线规则。</td></tr>
+          <tr><td>第二层</td><td>全局事实库文件，环境事实库。</td></tr>
+          <tr><td>第三层</td><td>记忆根目录下的流程说明与脚本，任务级复用。</td></tr>
+          <tr><td>第四层</td><td>会话归档目录，由对话侧压缩/裁剪与定时调度共同维护。</td></tr>
+          <tr><td>锚点</td><td>工作记忆锚点：历史摘要、工作要点便签、可选流程说明等拼成的一段提示。</td></tr>
+          <tr><td>结算</td><td>「开始长期记忆更新」工具 触发的长期记忆写入流程。</td></tr>
+        </tbody>
+      </table>
+      <p><strong>建议对照阅读的仓库位置：</strong></p>
+      <ul>
+        <li>记忆目录下的《记忆管理规范》——写入规则的权威说明</li>
+        <li>应用主入口——组装系统提示、具体处理器类的接入、飞书等多前端的注入</li>
+        <li>动作与记忆工具实现——读取全局索引、各工具落地逻辑、每轮结束回调、拼接工作记忆锚点</li>
+        <li>多轮工具主循环——每轮如何替换发给模型的消息包</li>
+        <li>大模型会话核心模块——压缩历史长标签、按长度裁剪旧消息、原生工具调用的对话封装</li>
+        <li>定时调度——第四层归档批处理</li>
+        <li>工具能力说明清单——工具与记忆的契约</li>
+      </ul>
+    </section>
+
+    <p class="part-label">下篇 — 小白动手实现</p>
+
+    <section id="s16">
+      <h2>16. 你要实现的「最小记忆系统」长什么样</h2>
+      <p>若目标是「像 GenericAgent 一样<strong>越用越强</strong>」，最小可交付不必一次做全第四层归档、对话历史压缩、多前端。你只要打通下面闭环即可：</p>
+      <ol>
+        <li><strong>磁盘</strong>：至少三个文件——<strong>第一层索引</strong>、<strong>第二层事实</strong>、<strong>第零层写入规范</strong>；再加一个<strong>第三层目录</strong>（放每个任务的短流程说明）。</li>
+        <li><strong>启动</strong>：把第一层索引（加目录结构说明）拼进<strong>系统提示</strong>，让模型知道「记忆放哪、叫什么」。</li>
+        <li><strong>会话内</strong>：内存里维护 工作要点便签 + 最近 N 条<strong>单行摘要</strong>；每轮工具后把这两块<strong>追加进用户侧提示</strong>（锚点）。</li>
+        <li><strong>工具</strong>：给模型三个动作——<strong>更新工作检查点</strong>、<strong>读文件</strong>、<strong>唯一块补丁写入</strong>（或只允许往第二层某一节末尾追加）。</li>
+        <li><strong>结算</strong>：任务结束前插入一轮「读第零层规范 + 再读第一层索引 + 只允许小块补丁写第二、三层并维护第一层」——与 GA 的「开始长期记忆更新」工具同构。</li>
+      </ol>
+      <div class="callout warn">
+        <strong>小白易错点：</strong>不要一上来就做向量库 / 图数据库。GA 的「技能树」本质是<strong>文件系统 + 短索引 + 模型按需读文件</strong>。先把文件与补丁式修改写对，再考虑检索增强。
+      </div>
+    </section>
+
+    <section id="s17">
+      <h2>17. 第一步：目录与四个文件的初始内容</h2>
+      <p>在你的项目根下建<strong>记忆根文件夹</strong>（名字可自定，但全程要固定）：</p>
+      <ul>
+        <li><strong>第一层索引文件</strong>：极短，硬性控制行数（例如不超过约四十行）。</li>
+        <li><strong>第二层事实文件</strong>：用「二级标题分节」组织环境事实。</li>
+        <li><strong>第零层规范文件</strong>：给人和模型共同遵守的写入规范（Markdown）。</li>
+        <li><strong>第三层技能目录</strong>：下面再放具体任务的短流程说明，例如「某业务的极简踩坑笔记」。</li>
+      </ul>
+      <p><strong>第一层要写什么：</strong>场景关键词指向某份第三层说明或第二层某一节；高频场景写清「去哪看」；低频只列关键词；另附几条一行一条的全局红线（例如禁止把密钥写进记忆文件）。</p>
+      <p><strong>第二层要写什么：</strong>开头标明这是全局事实库；分「路径与环境」「用户偏好」等小节；只收录<strong>经工具验证过</strong>的内容。</p>
+      <p><strong>第零层最小规范：</strong>三条就能启动——① 只写已验证事实；② 第一层只加索引不写长篇操作步骤；③ 修改磁盘文件时用「唯一旧片段替换」，禁止整文件瞎覆盖。</p>
+    </section>
+
+    <section id="s18">
+      <h2>18. 第二步：读第一层索引并进系统提示</h2>
+      <p>对应 GA 的「读取全局索引块」。你自己实现时做两件事即可：</p>
+      <ol>
+        <li>读磁盘上<strong>第一层索引文件</strong>的全文；再拼上几行<strong>固定不变的目录约定说明</strong>（告诉模型各层文件叫什么、各管什么）。</li>
+        <li>把「角色与行为说明」放在最前，后面接上上一步拼好的<strong>地图块</strong>，整体作为每次调用大模型时的<strong>系统侧说明</strong>。</li>
+      </ol>
+      <p><strong>不要</strong>把第二层事实全文默认塞进系统说明——会爆长度；需要时再让模型用读文件工具按需打开。</p>
+    </section>
+
+    <section id="s19">
+      <h2>19. 第三步：会话内状态与锚点字符串</h2>
+      <p>对应 GA 处理器里的<strong>工作区</strong>与<strong>回合摘要列表</strong>。建议在内存里用一个小结构存四样：</p>
+      <ul>
+        <li><strong>工作要点便签</strong>（短字符串）——当前约束、进度、易忘参数。</li>
+        <li><strong>回合摘要列表</strong>（字符串列表）——每轮模型输出的一行摘要，可用协议强制模型必须写。</li>
+        <li><strong>关联流程说明</strong>（可选路径）——提醒模型必要时重读第三层某份说明。</li>
+        <li><strong>当前轮次</strong>（整数）——便于做「每十轮重贴第一层索引」等策略。</li>
+      </ul>
+      <p><strong>锚点怎么拼</strong>（与 GA 的「工作记忆锚点」同构）：取最近约二十条摘要连成一段，包在「历史摘录」区块里；写上当前第几轮；若有工作要点便签，再包一层「工作要点」区块；若有流程说明路径，附一句「必要时请重读某文件」。</p>
+      <p>把这段锚点<strong>拼在用户消息前</strong>（或拼在工具结果之后、下一轮用户内容里），长任务才不容易丢约束。</p>
+    </section>
+
+    <section id="s20">
+      <h2>20. 第四步：一轮里用户消息怎么拼（时序）</h2>
+      <p>简化后的时序（多工具可并行扩展）：</p>
+      <ol>
+        <li><strong>首轮</strong>：系统侧用上一节拼好的完整系统说明；用户侧用「锚点 + 空行 + 用户原话」。</li>
+        <li>模型返回 tool calls → 你在本地执行工具 → 得到字符串结果。</li>
+        <li><strong>下一轮用户侧内容</strong>：通常包含「工具返回的结构化或纯文本结果」+ 组装锚点段落（锚点要反映<strong>最新</strong>工作要点便签与摘要）。</li>
+        <li>若模型调用了 更新检查点，先更新内存里的 工作要点便签，再进下一轮。</li>
+        <li>任务将结束时：先发一条「结算指令」用户消息（见下一节），让模型只做读文件和小块补丁写入。</li>
+      </ol>
+      <p>GenericAgent 里多轮往来存在<strong>会话级消息历史</strong>；你自己对接各厂商提供的客户端库时，把上述内容拆成多条角色消息即可，原理相同。</p>
+    </section>
+
+    <section id="s21">
+      <h2>21. 第五步：三个必备工具（参数与处理逻辑）</h2>
+      <p>与 GA 的九工具相比，最小可交付版本只需这三个与记忆强相关（其余业务工具另加）：</p>
+      <table>
+        <thead><tr><th>工具名</th><th>参数（概念）</th><th>你的处理器做什么</th></tr></thead>
+        <tbody>
+          <tr><td>「更新工作检查点」工具</td><td>工作要点便签；可选建议重读的操作说明名</td><td>只写会话内结构体，不碰磁盘。</td></tr>
+          <tr><td>受控的读记忆文件</td><td>文件路径；可选起止行</td><td>按路径读出文本；建议限制只能读记忆根目录下的文件。</td></tr>
+          <tr><td>受控的补丁式改文件</td><td>路径；要被替换的旧片段；替换后的新内容</td><td>做唯一块替换（见 §23）；失败则把原因返回给模型。</td></tr>
+        </tbody>
+      </table>
+      <p>若用大模型厂商的「函数调用」能力：为每个工具写清名称、参数类型与是否必填即可；<strong>更新检查点</strong>至少必填「工作要点」字符串，「关联流程说明」可选。</p>
+      <p>补丁式改工具的说明里务必写清：<strong>旧片段必须在目标文件中出现且只出现一次</strong>，否则让模型先读文件再改。</p>
+    </section>
+
+    <section id="s22">
+      <h2>22. 第六步：长期结算回合</h2>
+      <p>GA 的做法是：工具处理器把《记忆管理规范》全文和一段固定「结算指令」一并交给模型，作为下一轮用户侧内容的一部分。你照这个结构即可：</p>
+      <ol>
+        <li>读出<strong>第零层规范文件</strong>，作为工具返回或用户文本交给模型。</li>
+        <li>固定指令里写死：先读目标记忆文件、再用补丁式修改、禁止写密钥、第一层只加索引行。</li>
+        <li>再次附上<strong>当前第一层索引全文</strong>（与启动时同构的那块地图），避免模型覆盖错。</li>
+        <li>本轮之后<strong>尽量不要再开复杂业务工具</strong>，减少边结算边乱改的概率。</li>
+      </ol>
+      <p>触发时机自定：例如用户点「结束任务」、轮次超过某阈值、或模型主动调用你提供的「提交长期记忆」类工具（可与 GA 的「开始长期记忆更新」同职责）。</p>
+    </section>
+
+    <section id="s23">
+      <h2>23. 第七步：补丁式改文件——唯一块替换（核心）</h2>
+      <p>这是 GA「按唯一旧片段替换」的灵魂，用来避免模型整文件覆盖把资料库冲烂。逻辑用自然语言说就是：</p>
+      <ol>
+        <li>读出目标文件全文；</li>
+        <li>数一下「旧片段」出现了几次：零次则报错「找不到」；多于一次则报错「请加长旧片段以保证唯一」；</li>
+        <li>恰好一次时，只做<strong>一次替换</strong>，写回磁盘，返回成功。</li>
+      </ol>
+      <p>进阶可做：正文里写「某文件某行范围」自动展开成真实片段（GA 有类似能力）、路径白名单、改前 diff 给用户确认。</p>
+    </section>
+
+    <section id="s24">
+      <h2>24. 第八步：主循环里五件要记住的事</h2>
+      <p>把下面五件事挂在你的智能体主循环里，就与 GA 记忆逻辑<strong>同构</strong>：</p>
+      <ol>
+        <li><strong>每轮开始</strong>：轮次加一；可选每满十轮把第一层索引再拼进用户侧（或刷新工具说明书缓存）。</li>
+        <li><strong>模型输出后</strong>：解析单行摘要约定，追加进回合摘要列表。</li>
+        <li><strong>工具返回前</strong>：同一轮多个工具并行时，通常只对第一个附完整锚点，避免重复（GA 用「第几个工具」去重）。</li>
+        <li><strong>危险轮次</strong>：例如每 7 轮注入「禁止无效重试」类提示（可借鉴 GA 文案思路）。</li>
+        <li><strong>任务结束</strong>：走 §22 结算回合。</li>
+      </ol>
+    </section>
+
+    <section id="s25">
+      <h2>25. 仓库里的入门演示脚本</h2>
+      <p>文档同目录的 <strong>examples</strong> 文件夹里有一份<strong>不依赖 GA 其余模块</strong>的 Python 入门脚本，用来把上文步骤串成可跑通的一遍。它大致包含这些能力（名字随仓库为准，此处只说明职责）：</p>
+      <ul>
+        <li>初始化第零到三层目录与占位文件；</li>
+        <li>读取第一层索引并拼系统提示；</li>
+        <li>会话内维护检查点与锚点字符串；</li>
+        <li>教学用的「一条事实该进哪一层」分类示意；</li>
+        <li>对第二层文件做一次唯一块替换的演示；</li>
+        <li>拼出结算回合里交给模型的两段文字（规范 + 固定指令）。</li>
+      </ul>
+      <p>在本机用 Python 运行该脚本后，终端会依次打印：<strong>带第一层全文的系统提示片段</strong>、<strong>一轮典型的锚点长什么样</strong>、<strong>分层路由的判定示例</strong>、<strong>补丁写入第二层后的片段</strong>、以及<strong>结算指令前缀有多长</strong>。演示往往在临时目录里落盘，跑完即删；你把思路迁到自己项目时，把记忆根目录改成固定路径即可长期保留。</p>
+    </section>
+
+    <section id="s25-demo">
+      <h2>25+. 演示跑一遍时会发生什么（文字版）</h2>
+      <p>不看终端也能理解脚本在做什么，按顺序对应上面五段输出：</p>
+      <ol>
+        <li><strong>系统提示</strong>：角色说明后接上「目录约定」，再贴上第一层索引全文，让模型一开始就拿到地图。</li>
+        <li><strong>锚点</strong>：出现「工作记忆」标题；历史摘录里是多轮单行摘要；标明当前轮次；工作要点里写用户约束；必要时提醒重读某份第三层说明。</li>
+        <li><strong>分层路由</strong>：用标签区分环境事实、全局红线、应丢弃的易变状态、任务专有流程，便于对照 §4 决策树。</li>
+        <li><strong>写第二层</strong>：演示唯一块替换成功后，第二层里出现经「列表目录」等验证过的路径一类事实。</li>
+        <li><strong>结算</strong>：先量一下第零层规范有多长，再附上固定话术——只写已验证内容、禁密钥、先读再改、第一层只加索引——并再次贴上第一层全文防误删。</li>
+      </ol>
+      <p class="demo-note">若你本地运行结果与教学文字有出入，以仓库里脚本当前行为为准；本文只描述结构与学习顺序。</p>
+    </section>
+
+    <section id="s26">
+      <h2>26. 自检清单与进阶差距</h2>
+      <p><strong>上线前自检（建议逐条打勾）：</strong></p>
+      <ul class="checklist">
+        <li>第一层索引是否控制在约定行数内？是否仍出现大段操作步骤？</li>
+        <li>系统说明是否只带第一层索引与目录结构，而不是第二层全文？</li>
+        <li>锚点是否每轮（或每轮首个工具后）更新？</li>
+        <li>受控的补丁式改文件 是否强制唯一 old 块？</li>
+        <li>是否禁止模型把访问密钥写入记忆目录？（工具说明里写明 + 服务端校验路径与内容）</li>
+        <li>结算回合是否与业务工具隔离？</li>
+        <li>新任务开始时是否清空或继承 工作要点便签（策略与 GA 一致即可）？</li>
+      </ul>
+      <p><strong>从最小可交付到完整 GenericAgent 还差什么（按需再做）：</strong>多模型原生工具协议、对话历史压缩与裁剪、第四层定时归档、飞书等多前端、分步计划模式、记忆文件访问统计、以及完整的九原子工具与浏览器驱动。这些都不是「记忆闭环」的必要条件。</p>
+    </section>
+
+    <footer class="doc-foot">
+      <p>本文档由仓库当前实现整理，便于学习；与上游 README / 论文表述如有出入，以代码与 《记忆管理规范》文档 为准。</p>
+      <p>本文 HTML 位于仓库 <strong>docs</strong> 目录；入门演示脚本位于 <strong>docs/examples</strong> 目录（与《记忆管理规范》等文件并列，便于对照）。</p>
+    </footer>
+  </div>
+</body>
+</html>
